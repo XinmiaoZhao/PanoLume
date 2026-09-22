@@ -3,7 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
-SOURCE_PNG="${MYPTGUI_APP_ICON_SOURCE:-$PROJECT_DIR/Resources/AppIconSource.png}"
+if [[ -f "${PROJECT_DIR}/scripts/Private/environment.sh" ]]; then
+  source "${PROJECT_DIR}/scripts/Private/environment.sh"
+fi
+SOURCE_PNG="${PANOLUME_APP_ICON_SOURCE:-$PROJECT_DIR/Resources/AppIconSource.png}"
 OUTPUT_DIR="${1:-$PROJECT_DIR/.build/app-icon}"
 MINIMUM_DEPLOYMENT_TARGET="${MINIMUM_DEPLOYMENT_TARGET:-14.0}"
 

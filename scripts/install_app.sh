@@ -2,22 +2,26 @@
 set -euo pipefail
 
 APP_NAME="PanoLume"
-PRODUCT_NAME="MyPTGuiNative"
-BUNDLE_ID="com.zhaoxinmiao.MyPTGuiNative"
+PRODUCT_NAME="PanoLume"
+BUNDLE_ID="com.zhaoxinmiao.PanoLume"
 MARKETING_VERSION="0.3.0"
 
 SCRIPT_DIR="${0:A:h}"
 PROJECT_DIR="${SCRIPT_DIR:h}"
-PACKAGE_DIR="$PROJECT_DIR/macos/MyPTGuiNative"
+if [[ -f "${PROJECT_DIR}/scripts/Private/environment.sh" ]]; then
+  source "${PROJECT_DIR}/scripts/Private/environment.sh"
+fi
+PACKAGE_DIR="$PROJECT_DIR/macos/PanoLume"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/Applications}"
 BACKUP_ROOT="${BACKUP_ROOT:-$PROJECT_DIR/AppBackups}"
 LEGACY_BACKUP_ROOT="$INSTALL_DIR/AppBackups"
 PREVIOUS_BACKUP="$BACKUP_ROOT/Previous-$APP_NAME.app"
 TARGET_APP="$INSTALL_DIR/$APP_NAME.app"
-LEGACY_USER_APP="$INSTALL_DIR/MyPTGui Native.app"
-LEGACY_SYSTEM_APP="/Applications/MyPTGui Native.app"
+typeset -a LEGACY_APPS ACCEPTED_BUNDLE_IDS
+LEGACY_APPS=()
+ACCEPTED_BUNDLE_IDS=("$BUNDLE_ID")
 SYSTEM_TARGET_APP="/Applications/$APP_NAME.app"
-BUILD_ROOT="${MYPTGUI_INSTALL_BUILD_DIR:-}"
+BUILD_ROOT="${PANOLUME_INSTALL_BUILD_DIR:-}"
 SWIFTPM_BUILD_DIR=""
 OWNS_BUILD_ROOT=0
 STAGE_DIR=""
@@ -25,30 +29,12 @@ INSTALL_CANDIDATE=""
 NEW_BACKUP_PATH=""
 BACKUP_SOURCE_APP=""
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-
-cleanup() {
-  local exit_status=$?
-  # If replacement fails after moving the installed predecessor aside, restore
-  # it to the exact source location. Successful installs keep TARGET_APP and
-  # finalize NEW_BACKUP_PATH before this trap runs.
-  if (( exit_status != 0 )) \
-    && [[ -n "$NEW_BACKUP_PATH" && -d "$NEW_BACKUP_PATH" ]] \
-    && [[ -n "$BACKUP_SOURCE_APP" && ! -e "$BACKUP_SOURCE_APP" ]]; then
-    /bin/mv "$NEW_BACKUP_PATH" "$BACKUP_SOURCE_APP" 2>/dev/null || true
-    NEW_BACKUP_PATH=""
-  fi
-  if [[ -n "$STAGE_DIR" ]]; then
-    rm -rf "$STAGE_DIR"
-  fi
-  if [[ -n "$INSTALL_CANDIDATE" && -e "$INSTALL_CANDIDATE" ]]; then
-    rm -rf "$INSTALL_CANDIDATE"
-  fi
-  if [[ "$OWNS_BUILD_ROOT" == "1" && -n "$BUILD_ROOT" && -e "$BUILD_ROOT" ]]; then
-    rm -rf "$BUILD_ROOT"
-  fi
-  return $exit_status
-}
+source "$SCRIPT_DIR/app_install_transaction.sh"
+if [[ -f "$SCRIPT_DIR/Private/installation-policy.sh" ]]; then
+  source "$SCRIPT_DIR/Private/installation-policy.sh"
+fi
 trap cleanup EXIT
+
 
 linked_dylib_paths() {
   local binary="$1"
@@ -182,55 +168,6 @@ verify_relocatable_dylibs() {
   [[ "$failed" == false ]]
 }
 
-bundle_identifier() {
-  local app="$1"
-  /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist" 2>/dev/null || true
-}
-
-backup_previous_app() {
-  local app="$1"
-  local actual_id
-  [[ -d "$app" ]] || return 0
-  actual_id="$(bundle_identifier "$app")"
-  if [[ "$actual_id" != "$BUNDLE_ID" ]]; then
-    print -u2 "Refusing to move $app because its bundle ID is '${actual_id:-missing}', not '$BUNDLE_ID'."
-    return 1
-  fi
-  NEW_BACKUP_PATH="$BACKUP_ROOT/.Previous-$APP_NAME-installing-$$.app"
-  BACKUP_SOURCE_APP="$app"
-  if [[ -e "$NEW_BACKUP_PATH" ]]; then
-    print -u2 "Unexpected temporary backup already exists: $NEW_BACKUP_PATH"
-    return 1
-  fi
-  /bin/mv "$app" "$NEW_BACKUP_PATH"
-}
-
-finalize_backup_history() {
-  local backup
-  # The replacement is already installed and verified before this function is
-  # called. Only now is it safe to discard older backup generations.
-  for backup in "$BACKUP_ROOT"/*.app(N); do
-    /bin/rm -rf "$backup"
-  done
-  for backup in "$BACKUP_ROOT"/.Previous-$APP_NAME-installing-*.app(N); do
-    [[ "$backup" == "$NEW_BACKUP_PATH" ]] || /bin/rm -rf "$backup"
-  done
-  if [[ -n "$NEW_BACKUP_PATH" && -d "$NEW_BACKUP_PATH" ]]; then
-    /bin/mv "$NEW_BACKUP_PATH" "$PREVIOUS_BACKUP"
-    NEW_BACKUP_PATH=""
-    print "Saved previous version to $PREVIOUS_BACKUP"
-  fi
-
-  # Remove backup generations created by older installers under Applications.
-  # Preserve unrelated non-App files if that directory was repurposed locally.
-  if [[ "$LEGACY_BACKUP_ROOT" != "$BACKUP_ROOT" && -d "$LEGACY_BACKUP_ROOT" ]]; then
-    for backup in "$LEGACY_BACKUP_ROOT"/*.app(N); do
-      /bin/rm -rf "$backup"
-    done
-    /bin/rmdir "$LEGACY_BACKUP_ROOT" 2>/dev/null || true
-  fi
-}
-
 if [[ -z "$BUILD_ROOT" ]]; then
   BUILD_ROOT="$(mktemp -d /private/tmp/panolume-install-build.XXXXXX)"
   OWNS_BUILD_ROOT=1
@@ -243,26 +180,27 @@ print "Building release executable…"
 swift build \
   --package-path "$PACKAGE_DIR" \
   --configuration release \
+  --jobs 4 \
   --product "$PRODUCT_NAME" \
   --scratch-path "$SWIFTPM_BUILD_DIR"
 
 print "Building Metal renderer…"
-env MYPTGUI_METAL_OUTPUT_DIR="$BUILD_ROOT/metal" \
-  CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/private/tmp/myptgui-clang-module-cache}" \
+env PANOLUME_METAL_OUTPUT_DIR="$BUILD_ROOT/metal" \
+  CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/private/tmp/panolume-clang-module-cache}" \
   /bin/bash "$PROJECT_DIR/scripts/build_metal_renderer.sh" >/dev/null
 
-STAGE_DIR="$(mktemp -d /private/tmp/myptgui-app-stage.XXXXXX)"
+STAGE_DIR="$(mktemp -d /private/tmp/panolume-app-stage.XXXXXX)"
 STAGED_APP="$STAGE_DIR/$APP_NAME.app"
 ICON_OUTPUT="$STAGE_DIR/AppIconBuild"
 EXECUTABLE_PATH="$SWIFTPM_BUILD_DIR/release/$PRODUCT_NAME"
-METAL_DYLIB="$BUILD_ROOT/metal/libmyptgui_metal.dylib"
+METAL_DYLIB="$BUILD_ROOT/metal/libpanolume_metal.dylib"
 
 "$PROJECT_DIR/scripts/build_app_icon.sh" "$ICON_OUTPUT" >/dev/null
 mkdir -p "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Contents/Resources" "$STAGED_APP/Contents/Frameworks"
 /usr/bin/install -m 755 "$EXECUTABLE_PATH" "$STAGED_APP/Contents/MacOS/$PRODUCT_NAME"
 /usr/bin/ditto "$ICON_OUTPUT/AppIcon.icns" "$STAGED_APP/Contents/Resources/AppIcon.icns"
 /usr/bin/ditto "$ICON_OUTPUT/Assets.car" "$STAGED_APP/Contents/Resources/Assets.car"
-/usr/bin/install -m 755 "$METAL_DYLIB" "$STAGED_APP/Contents/Frameworks/libmyptgui_metal.dylib"
+/usr/bin/install -m 755 "$METAL_DYLIB" "$STAGED_APP/Contents/Frameworks/libpanolume_metal.dylib"
 bundle_dylib_closure "$STAGED_APP/Contents/MacOS/$PRODUCT_NAME" "$STAGED_APP/Contents/Frameworks"
 verify_relocatable_dylibs "$STAGED_APP"
 
@@ -303,56 +241,4 @@ if [[ "$(bundle_identifier "$STAGED_APP")" != "$BUNDLE_ID" ]]; then
   exit 1
 fi
 
-# No installed app is moved until the replacement has passed dependency,
-# plist, icon and signature validation above.
-mkdir -p "$INSTALL_DIR" "$BACKUP_ROOT"
-for existing_app in "$LEGACY_USER_APP" "$LEGACY_SYSTEM_APP" "$SYSTEM_TARGET_APP" "$TARGET_APP"; do
-  if [[ -d "$existing_app" && "$(bundle_identifier "$existing_app")" != "$BUNDLE_ID" ]]; then
-    print -u2 "Refusing to replace $existing_app because its bundle ID is not '$BUNDLE_ID'."
-    exit 1
-  fi
-done
-
-# Copy the fully validated candidate onto the destination volume first. The
-# final move is then atomic on that volume and cannot strand the current app
-# merely because a long cross-volume copy failed.
-INSTALL_CANDIDATE="$INSTALL_DIR/.PanoLume-installing-$$.app"
-if [[ -e "$INSTALL_CANDIDATE" ]]; then
-  print -u2 "Unexpected installation candidate already exists: $INSTALL_CANDIDATE"
-  exit 1
-fi
-/usr/bin/ditto "$STAGED_APP" "$INSTALL_CANDIDATE"
-/usr/bin/codesign --verify --deep --strict "$INSTALL_CANDIDATE"
-
-# Preserve exactly one previous version. Prefer the canonical user install;
-# legacy locations are considered only during the first migration.
-PREVIOUS_APP=""
-for existing_app in "$TARGET_APP" "$SYSTEM_TARGET_APP" "$LEGACY_USER_APP" "$LEGACY_SYSTEM_APP"; do
-  if [[ -d "$existing_app" ]]; then
-    PREVIOUS_APP="$existing_app"
-    break
-  fi
-done
-if [[ -n "$PREVIOUS_APP" ]]; then
-  backup_previous_app "$PREVIOUS_APP"
-fi
-/bin/mv "$INSTALL_CANDIDATE" "$TARGET_APP"
-INSTALL_CANDIDATE=""
-/usr/bin/xattr -cr "$TARGET_APP" 2>/dev/null || true
-/usr/bin/codesign --verify --deep --strict "$TARGET_APP"
-/usr/bin/touch "$TARGET_APP"
-
-# Matching duplicate installations are older than both the new canonical app
-# and its single saved predecessor. Remove them only after replacement passes.
-for existing_app in "$SYSTEM_TARGET_APP" "$LEGACY_USER_APP" "$LEGACY_SYSTEM_APP"; do
-  if [[ -d "$existing_app" ]]; then
-    /bin/rm -rf "$existing_app" 2>/dev/null \
-      || print -u2 "Warning: could not remove obsolete duplicate $existing_app"
-  fi
-done
-finalize_backup_history
-
-if [[ "${MYPTGUI_SKIP_LAUNCH_SERVICES:-0}" != 1 && -x "$LSREGISTER" ]]; then
-  "$LSREGISTER" -f "$TARGET_APP" >/dev/null 2>&1 || true
-fi
-print "Installed $APP_NAME to $TARGET_APP"
+install_validated_app

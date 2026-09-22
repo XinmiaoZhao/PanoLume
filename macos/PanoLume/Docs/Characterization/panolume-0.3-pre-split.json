@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "purpose": "Behavioral baseline captured immediately before the PanoLume 0.3 engine-only module split.",
+  "metal_api_version": 5,
+  "raw_2_auto": {
+    "projection_geometry_state": "verified_camera",
+    "selected_correct_pair": "2175-2177",
+    "excluded_wrong_pair": "2175-2183",
+    "pair_p95_pixels": [
+      0.277,
+      0.2513,
+      0.2891,
+      0.2678,
+      0.5735,
+      1.8047,
+      0.986
+    ],
+    "worst_pair_risk_ratio": 0.5723,
+    "worst_effective_grid_risk_ratio": 0.4081
+  },
+  "raw_2_manual_fixture": {
+    "input": 7,
+    "accepted": 0,
+    "rejected": 7,
+    "accounted": 7,
+    "dirty_cleared": true,
+    "projection_geometry_state": "verified_camera"
+  },
+  "raw_2_export_pair": {
+    "width": 9000,
+    "height": 3383,
+    "bit_depth": 16,
+    "channels": 3,
+    "metal_renderer": "metal_quality",
+    "metal_fallback": false,
+    "coverage_iou": 0.99990967,
+    "rgb_ssim": 0.99994952,
+    "median_absolute_difference": 1.526e-05,
+    "p95_absolute_difference": 0.0005951
+  },
+  "raw_1_canvas": {
+    "pitch_degrees": 39.91,
+    "yaw_degrees": 88.19,
+    "renderer": "metal_quality",
+    "renderer_fallback": false,
+    "width": 6416,
+    "height": 1876,
+    "transparent_bands_top_right_bottom_left": [
+      2,
+      1,
+      1,
+      1
+    ],
+    "coverage_clipped": false
+  },
+  "required_characterization_entrypoints": [
+    "panolume_identity_matcher_characterization_self_test",
+    "panolume_local_warp_characterization_self_test",
+    "panolume_astro_psf_characterization_self_test",
+    "panolume_astro_geometry_characterization_self_test",
+    "panolume_source_ownership_characterization_self_test",
+    "panolume_typed_request_characterization_self_test"
+  ]
+}

@@ -12,15 +12,14 @@ Requires macOS 14+, Xcode Command Line Tools with Swift 6, and Homebrew dependen
 ```sh
 brew install opencv@4 ceres-solver eigen libraw libtiff glog
 bash scripts/build_metal_renderer.sh
-cd macos/MyPTGuiNative
+cd macos/PanoLume
 swift build --jobs 4
 swift test --jobs 4
-swift run MyPTGuiNativeSelfTest
-swift run MyPTGuiNative
+swift run PanoLumeSelfTest
+swift run PanoLume
 ```
 
-The package/product names retain `MyPTGui` for compatibility. Python is not an
-application runtime dependency. No other source checkout or private module is
+Python is not an application runtime dependency. No other source checkout or private module is
 required. The optional source-extension hooks are inactive in this distribution.
 
 ## Capabilities and current limits
@@ -48,8 +47,8 @@ Metal is expected. A successful build or synthetic test is not release certifica
 ## Reproducible synthetic check
 
 ```sh
-cd macos/MyPTGuiNative
-swift run MyPTGuiRegression standard-image-regression \
+cd macos/PanoLume
+swift run PanoLumeRegression standard-image-regression \
   --case synthetic-crops --output-dir /tmp/panolume-synthetic
 ```
 
