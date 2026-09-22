@@ -1,0 +1,45 @@
+# Python build/test artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Local browse-only copy of the archived Python/PySide implementation.
+# Restore it from archive/python-pyside-final-2026-07-11 when needed.
+legacy/python/
+
+# SwiftPM / native build artifacts
+.build/
+DerivedData/
+*.xcuserstate
+
+# OS/editor noise
+.DS_Store
+
+# The installer keeps exactly one local predecessor here. App bundles must not
+# enter Git history.
+/AppBackups/
+
+# Large local inputs and generated stitching artifacts.
+# Keep real RAW files, scratch test images, diagnostics, and exports out of Git.
+*.tif
+*.tiff
+test_pics/*
+test_astro/raw_1/*
+test_astro/raw_2/*
+test_astro/previews/*
+test_astro/diagnostics/*
+!test_astro/raw_1/.gitkeep
+!test_astro/raw_2/.gitkeep
+!test_astro/previews/.gitkeep
+!test_astro/diagnostics/.gitkeep
+
+# Local lens profiles may be proprietary or bulky.
+lens_profiles/*.lcp
+lens_profiles/**/*.lcp
+lens_profiles/*.xml
+lens_profiles/**/*.xml

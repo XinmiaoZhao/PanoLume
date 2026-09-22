@@ -1,0 +1,24 @@
+name: Public source build
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: brew install opencv@4 ceres-solver eigen libraw libtiff glog
+      - run: bash scripts/build_metal_renderer.sh
+      - working-directory: macos/MyPTGuiNative
+        run: |
+          swift build --jobs 4
+          swift test --jobs 4
+          swift run --skip-build MyPTGuiNativeSelfTest
+          set +e
+          swift run --skip-build MyPTGuiRegression capabilities
+          status=$?
+          set -e
+          test "$status" -eq 3
